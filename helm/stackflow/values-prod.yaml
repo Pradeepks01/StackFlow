@@ -7,11 +7,31 @@ strategy:
     activeService: stackflow-frontend
     previewService: stackflow-frontend-preview
     autoPromotionEnabled: false
+    scaleDownDelaySeconds: 30
+    previewReplicaCount: 2
 
 backend:
+  image:
+    tag: "prod-latest"
   hpa:
+    enabled: true
     minReplicas: 4
     maxReplicas: 20
+    targetCPUUtilizationPercentage: 65
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  env:
+    LOG_LEVEL: "warn"
+    NODE_ENV: "production"
+
+frontend:
+  image:
+    tag: "prod-latest"
 
 ingress:
   hosts:
