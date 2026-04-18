@@ -3,10 +3,13 @@ kind: Application
 metadata:
   name: stackflow-prod
   namespace: argocd
+  labels:
+    environment: prod
+    strategy: blue-green
 spec:
   project: default
   source:
-    repoURL: https://github.com/your-org/stackflow.git
+    repoURL: https://github.com/Pradeepks01/StackFlow.git
     targetRevision: main
     path: helm/stackflow
     helm:
@@ -22,3 +25,9 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
