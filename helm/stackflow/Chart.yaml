@@ -1,0 +1,11 @@
+apiVersion: v2
+name: stackflow
+description: A Helm chart for the StackFlow end-to-end DevOps application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: argo-rollouts
+    version: 1.5.0
+    repository: https://argoproj.github.io/argo-helm
+    condition: argoRollouts.enabled

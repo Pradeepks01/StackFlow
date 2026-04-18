@@ -1,0 +1,50 @@
+# Default values for stackflow.
+replicaCount: 2
+
+image:
+  repository: 1234567890.dkr.ecr.us-east-1.amazonaws.com/stackflow
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+backend:
+  name: backend
+  image:
+    repository: 1234567890.dkr.ecr.us-east-1.amazonaws.com/stackflow-backend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 5000
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+frontend:
+  name: frontend
+  image:
+    repository: 1234567890.dkr.ecr.us-east-1.amazonaws.com/stackflow-frontend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 80
+
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+  hosts:
+    - host: stackflow.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+postgresql:
+  enabled: true
+  auth:
+    database: stackflow
+    username: admin
+    password: "password"
