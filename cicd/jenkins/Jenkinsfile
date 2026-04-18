@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'us-east-1'
+        ECR_REGISTRY = '1234567890.dkr.ecr.us-east-1.amazonaws.com'
+        APP_NAME = 'stackflow'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh './cicd/jenkins/scripts/build.sh'
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                sh 'trivy image ${ECR_REGISTRY}/${APP_NAME}-backend:${env.BUILD_NUMBER}'
+            }
+        }
+
+        stage('Deploy to Dev') {
+            when { branch 'devops' }
+            steps {
+                sh './cicd/jenkins/scripts/deploy.sh dev'
+            }
+        }
+
+        stage('Deploy to Staging (Canary)') {
+            when { branch 'test' }
+            steps {
+                sh './cicd/jenkins/scripts/canary.sh'
+            }
+        }
+
+        stage('Deploy to Production (Blue-Green)') {
+            when { branch 'main' }
+            steps {
+                sh './cicd/jenkins/scripts/blue-green.sh'
+            }
+        }
+    }
+
+    post {
+        failure {
+            sh './cicd/jenkins/scripts/rollback.sh'
+        }
+    }
+}
