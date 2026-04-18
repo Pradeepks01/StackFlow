@@ -1,0 +1,4 @@
+scan:
+  severity: 'HIGH,CRITICAL'
+  ignore-unfixed: true
+  format: 'table'

@@ -1,0 +1,3 @@
+# Snyk configuration
+severityThreshold: medium
+failOnIssues: true
