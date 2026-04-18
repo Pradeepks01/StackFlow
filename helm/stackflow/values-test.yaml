@@ -1,0 +1,15 @@
+# Test (Staging) specific values - Canary Deployment
+replicaCount: 2
+
+strategy:
+  type: Canary
+  canary:
+    steps:
+      - setWeight: 20
+      - pause: { duration: 1h }
+      - setWeight: 50
+      - pause: { duration: 1h }
+
+ingress:
+  hosts:
+    - host: test.stackflow.example.com

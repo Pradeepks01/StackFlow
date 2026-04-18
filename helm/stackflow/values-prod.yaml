@@ -1,0 +1,18 @@
+# Prod specific values - Blue-Green Deployment
+replicaCount: 4
+
+strategy:
+  type: BlueGreen
+  blueGreen:
+    activeService: stackflow-frontend
+    previewService: stackflow-frontend-preview
+    autoPromotionEnabled: false
+
+backend:
+  hpa:
+    minReplicas: 4
+    maxReplicas: 20
+
+ingress:
+  hosts:
+    - host: stackflow.example.com

@@ -1,0 +1,17 @@
+# Dev specific values
+replicaCount: 1
+
+backend:
+  hpa:
+    enabled: false
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+ingress:
+  hosts:
+    - host: dev.stackflow.example.com
