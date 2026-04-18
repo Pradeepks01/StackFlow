@@ -1,0 +1,29 @@
+{{- if .Values.strategy -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "stackflow.fullname" . }}-frontend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          ports:
+            - containerPort: 80
+  strategy:
+    {{- if eq .Values.strategy.type "Canary" }}
+    canary:
+      {{- toYaml .Values.strategy.canary | nindent 6 }}
+    {{- else if eq .Values.strategy.type "BlueGreen" }}
+    blueGreen:
+      {{- toYaml .Values.strategy.blueGreen | nindent 6 }}
+    {{- end }}
+{{- end }}
