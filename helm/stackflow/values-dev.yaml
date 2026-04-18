@@ -2,6 +2,8 @@
 replicaCount: 1
 
 backend:
+  image:
+    tag: "dev-latest"
   hpa:
     enabled: false
   resources:
@@ -11,6 +13,13 @@ backend:
     requests:
       cpu: 100m
       memory: 128Mi
+  env:
+    LOG_LEVEL: "debug"
+    NODE_ENV: "development"
+
+frontend:
+  image:
+    tag: "dev-latest"
 
 ingress:
   hosts:
