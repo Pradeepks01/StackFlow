@@ -1,0 +1,13 @@
+# Environment-specific overrides for Prod
+replicaCount: 3
+
+strategy:
+  type: BlueGreen
+  blueGreen:
+    autoPromotionEnabled: false
+
+backend:
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10

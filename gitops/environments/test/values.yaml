@@ -1,0 +1,9 @@
+# Environment-specific overrides for Test (Staging)
+replicaCount: 2
+
+strategy:
+  type: Canary
+  canary:
+    steps:
+      - setWeight: 20
+      - pause: { duration: 5m }

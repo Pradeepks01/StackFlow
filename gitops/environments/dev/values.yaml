@@ -1,0 +1,12 @@
+# Environment-specific overrides for Dev
+backend:
+  hpa:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+ingress:
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
