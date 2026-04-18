@@ -1,0 +1,20 @@
+groups:
+- name: stackflow-alerts
+  rules:
+  - alert: HighCpuUsage
+    expr: sum(rate(container_cpu_usage_seconds_total{container="backend"}[5m])) by (pod) > 0.7
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: High CPU usage on {{ $labels.pod }}
+      description: Pod {{ $labels.pod }} CPU usage is above 70% for more than 2 minutes.
+
+  - alert: BackendOffline
+    expr: up{job="stackflow-backend"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: Backend service is offline
+      description: The backend service has been down for more than 1 minute.

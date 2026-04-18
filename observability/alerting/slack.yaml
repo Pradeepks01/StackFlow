@@ -1,0 +1,6 @@
+# Slack Webhook details for AlertManager
+# This is usually kept secret but structure asks for it.
+slack:
+  api_url: "http://localhost/dummy-webhook"
+  channel: "#devops-alerts"
+  username: "StackFlow-Bot"
