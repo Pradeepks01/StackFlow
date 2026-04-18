@@ -3,10 +3,12 @@ kind: Application
 metadata:
   name: stackflow-dev
   namespace: argocd
+  labels:
+    environment: dev
 spec:
   project: default
   source:
-    repoURL: https://github.com/your-org/stackflow.git
+    repoURL: https://github.com/Pradeepks01/StackFlow.git
     targetRevision: devops
     path: helm/stackflow
     helm:
