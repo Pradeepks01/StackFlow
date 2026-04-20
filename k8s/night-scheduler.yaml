@@ -1,6 +1,5 @@
-# --- Night Scheduler: Scale Down at Night (Save 40-60%) ---
-# Scales deployments to 0 replicas from 10 PM to 8 AM IST
-# Saves compute cost during off-hours
+# scales down dev/test at night to save money
+# 10pm IST = 4:30pm UTC, 8am IST = 2:30am UTC
 
 apiVersion: batch/v1
 kind: CronJob
@@ -8,7 +7,6 @@ metadata:
   name: scale-down-night
   namespace: dev
 spec:
-  # 10:00 PM IST = 4:30 PM UTC
   schedule: "30 16 * * *"
   jobTemplate:
     spec:
@@ -22,10 +20,8 @@ spec:
                 - /bin/sh
                 - -c
                 - |
-                  echo "⏬ Scaling down all deployments..."
                   kubectl scale deployment --all --replicas=0 -n dev
                   kubectl scale deployment --all --replicas=0 -n test
-                  echo "✅ All deployments scaled to 0"
           restartPolicy: OnFailure
 
 ---
@@ -35,8 +31,7 @@ metadata:
   name: scale-up-morning
   namespace: dev
 spec:
-  # 8:00 AM IST = 2:30 AM UTC
-  schedule: "30 2 * * 1-5"
+  schedule: "30 2 * * 1-5"  # weekdays only
   jobTemplate:
     spec:
       template:
@@ -49,16 +44,13 @@ spec:
                 - /bin/sh
                 - -c
                 - |
-                  echo "⬆️ Scaling up deployments..."
                   kubectl scale deployment stackflow-backend --replicas=1 -n dev
                   kubectl scale deployment stackflow-frontend --replicas=1 -n dev
                   kubectl scale deployment stackflow-backend --replicas=2 -n test
                   kubectl scale deployment stackflow-frontend --replicas=2 -n test
-                  echo "✅ All deployments scaled up"
           restartPolicy: OnFailure
 
 ---
-# Service account for scheduler
 apiVersion: v1
 kind: ServiceAccount
 metadata:

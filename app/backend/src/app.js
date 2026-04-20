@@ -1,29 +1,27 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { register, metricsMiddleware } = require('../observability/metrics');
-const logger = require('../observability/logger');
-const startTracer = require('../observability/tracer');
-const correlationMiddleware = require('../observability/correlation');
+const { collectDefaultMetrics, register } = require('prom-client');
+const logger = require('./observability/logger');
+const { metricsMiddleware } = require('./observability/metrics');
+const { startTracer } = require('./observability/tracer');
+const correlationMiddleware = require('./observability/correlation');
 
 dotenv.config();
 
-// Initialize OpenTelemetry tracing before anything else
+// init tracing before anything else
 startTracer();
 
+collectDefaultMetrics({ prefix: 'stackflow_backend_' });
+
 const app = express();
-const port = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-
-// Correlation ID Middleware — adds X-Correlation-ID to every request/response
 app.use(correlationMiddleware);
-
-// Prometheus Metrics Middleware
 app.use(metricsMiddleware);
 
-// Routes
 app.get('/', (req, res) => {
   logger.info('Root endpoint hit', { correlationId: req.correlationId });
   res.json({ message: 'Welcome to StackFlow API', status: 'UP' });
@@ -34,16 +32,14 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/metrics', async (req, res) => {
-  res.setHeader('Content-Type', register.contentType);
-  res.send(await register.metrics());
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
 });
 
-// Error handling
-app.use((err, req, res, next) => {
-  logger.error(err.stack, { correlationId: req.correlationId });
-  res.status(500).send('Something broke!');
+// TODO: add actual CRUD routes for users and system_logs tables
+
+app.listen(PORT, () => {
+  logger.info(`Server is running on port ${PORT}`);
 });
 
-app.listen(port, () => {
-  logger.info(`Server is running on port ${port}`);
-});
+module.exports = app;

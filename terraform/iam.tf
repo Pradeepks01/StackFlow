@@ -1,5 +1,3 @@
-# --- IAM Roles ---
-
 resource "aws_iam_role" "eks_cluster_role" {
   name = "stackflow-eks-cluster-role"
 
@@ -30,8 +28,7 @@ resource "aws_iam_role" "eks_node_role" {
   })
 }
 
-# --- Policy Data Sources (safe ARN resolution) ---
-
+# lookup managed policies instead of hardcoding ARNs
 data "aws_iam_policy" "eks_worker_node" {
   arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
@@ -43,8 +40,6 @@ data "aws_iam_policy" "eks_cni" {
 data "aws_iam_policy" "ecr_read_only" {
   arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
-
-# --- Policy Attachments ---
 
 resource "aws_iam_role_policy_attachment" "eks_node_WorkerNodePolicy" {
   policy_arn = data.aws_iam_policy.eks_worker_node.arn

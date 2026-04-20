@@ -11,7 +11,7 @@ variable "environment" {
 }
 
 variable "db_password" {
-  description = "Database password - pass via TF_VAR_db_password or -var flag. Never commit a real password."
+  description = "Database password - pass via TF_VAR_db_password"
   type        = string
   sensitive   = true
 }

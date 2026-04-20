@@ -21,8 +21,7 @@ provider "aws" {
 
 data "aws_availability_zones" "available" {}
 
-# --- DynamoDB Table for Terraform State Locking ---
-
+# dynamodb table for state locking
 resource "aws_dynamodb_table" "terraform_lock" {
   name         = "terraform-lock"
   billing_mode = "PAY_PER_REQUEST"

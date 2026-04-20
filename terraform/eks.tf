@@ -1,5 +1,3 @@
-# --- EKS Cluster (Cost-Optimized) ---
-
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
@@ -7,17 +5,14 @@ module "eks" {
   cluster_name    = "stackflow-cluster"
   cluster_version = "1.29"
 
-  # Access Settings
   enable_cluster_creator_admin_permissions = true
   cluster_endpoint_public_access           = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  # --- Cost-Optimized Node Groups ---
   eks_managed_node_groups = {
-
-    # Spot instances for non-critical workloads (70-90% cheaper)
+    # spot nodes - these handle most of the workload
     spot = {
       name = "stackflow-spot-nodes"
 
@@ -25,8 +20,7 @@ module "eks" {
       max_size     = 4
       desired_size = 2
 
-      # ARM-based Graviton = 20-30% cheaper than x86
-      # Multiple types for better spot availability
+      # using graviton (arm) + multiple types for better spot availability
       instance_types = ["t4g.medium", "t3a.medium", "t3.medium"]
       capacity_type  = "SPOT"
       ami_type       = "AL2_ARM_64"
@@ -43,7 +37,7 @@ module "eks" {
       }
     }
 
-    # On-demand for critical workloads (database connections, ingress controller)
+    # on-demand for stuff that cant handle interruptions
     ondemand = {
       name = "stackflow-ondemand-nodes"
 
@@ -67,8 +61,7 @@ module "eks" {
   }
 
   tags = {
-    Environment  = var.environment
-    Project      = "StackFlow"
-    CostCenter   = "optimized"
+    Environment = var.environment
+    Project     = "StackFlow"
   }
 }

@@ -1,6 +1,5 @@
-# --- Grafana Loki (Lightweight ELK Replacement) ---
-# ELK uses 2-4GB RAM. Loki uses ~100MB.
-# Same query power via Grafana. Saves ₹8K-20K/month.
+# loki + promtail - replaces ELK stack
+# uses ~200mb ram total instead of 4-6gb
 
 apiVersion: v1
 kind: ConfigMap
@@ -32,7 +31,7 @@ data:
             prefix: index_
             period: 24h
     limits_config:
-      retention_period: 72h     # 3 days only (cost optimization)
+      retention_period: 72h
       max_query_length: 24h
     compactor:
       retention_enabled: true
@@ -64,7 +63,7 @@ spec:
               memory: 64Mi
             limits:
               cpu: 200m
-              memory: 128Mi    # 128MB vs 4GB for Elasticsearch!
+              memory: 128Mi
           volumeMounts:
             - name: loki-config
               mountPath: /etc/loki
@@ -91,7 +90,7 @@ spec:
       targetPort: 3100
 
 ---
-# --- Promtail (Log Collector — replaces Filebeat + Logstash) ---
+# promtail collects logs from all pods and ships to loki
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -117,7 +116,7 @@ spec:
               memory: 32Mi
             limits:
               cpu: 100m
-              memory: 64Mi    # 64MB vs 1GB for Logstash!
+              memory: 64Mi
           volumeMounts:
             - name: promtail-config
               mountPath: /etc/promtail

@@ -1,5 +1,3 @@
-# --- Application Load Balancer ---
-
 resource "aws_lb" "stackflow_alb" {
   name               = "stackflow-alb"
   internal           = false
@@ -10,11 +8,8 @@ resource "aws_lb" "stackflow_alb" {
   tags = {
     Name        = "stackflow-alb"
     Environment = var.environment
-    Project     = "StackFlow"
   }
 }
-
-# --- ACM Certificate for HTTPS ---
 
 resource "aws_acm_certificate" "stackflow_cert" {
   domain_name       = "stackflow.example.com"
@@ -26,11 +21,8 @@ resource "aws_acm_certificate" "stackflow_cert" {
 
   tags = {
     Environment = var.environment
-    Project     = "StackFlow"
   }
 }
-
-# --- Target Group ---
 
 resource "aws_lb_target_group" "stackflow_tg" {
   name        = "stackflow-tg"
@@ -47,14 +39,9 @@ resource "aws_lb_target_group" "stackflow_tg" {
     interval            = 30
     timeout             = 5
   }
-
-  tags = {
-    Environment = var.environment
-  }
 }
 
-# --- HTTPS Listener (Primary) ---
-
+# https listener
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.stackflow_alb.arn
   port              = 443
@@ -68,8 +55,7 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# --- HTTP Listener (Redirect to HTTPS) ---
-
+# redirect http -> https
 resource "aws_lb_listener" "http_redirect" {
   load_balancer_arn = aws_lb.stackflow_alb.arn
   port              = 80
@@ -85,13 +71,10 @@ resource "aws_lb_listener" "http_redirect" {
   }
 }
 
-# --- Security Group ---
-
 resource "aws_security_group" "alb_sg" {
   name   = "stackflow-alb-sg"
   vpc_id = module.vpc.vpc_id
 
-  # HTTP — redirects to HTTPS
   ingress {
     from_port   = 80
     to_port     = 80
@@ -99,7 +82,6 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # HTTPS
   ingress {
     from_port   = 443
     to_port     = 443

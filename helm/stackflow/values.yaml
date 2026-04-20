@@ -1,5 +1,4 @@
-# Default values for stackflow (Cost-Optimized)
-replicaCount: 1  # Start with 1, HPA scales up as needed
+replicaCount: 1
 
 image:
   repository: 1234567890.dkr.ecr.ap-south-1.amazonaws.com/stackflow
@@ -14,20 +13,18 @@ backend:
   service:
     type: ClusterIP
     port: 5000
-  # Right-sized resources (based on actual usage, not over-provisioned)
   resources:
     requests:
-      cpu: 50m       # Actual usage: ~30-50m
-      memory: 64Mi   # Actual usage: ~50-80Mi
+      cpu: 50m
+      memory: 64Mi
     limits:
       cpu: 200m
       memory: 256Mi
   hpa:
     enabled: true
-    minReplicas: 1   # Scale from 1 (not 2)
-    maxReplicas: 5   # Reduced from 10
+    minReplicas: 1
+    maxReplicas: 5
     targetCPUUtilizationPercentage: 75
-  # Prefer spot nodes for backend
   nodeSelector:
     workload: general
 
@@ -49,9 +46,10 @@ frontend:
   nodeSelector:
     workload: general
 
+# switched from alb to nginx ingress to save cost
 ingress:
   enabled: true
-  className: "nginx"  # NGINX Ingress instead of ALB Ingress (saves $16/mo)
+  className: "nginx"
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
   hosts:

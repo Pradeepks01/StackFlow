@@ -3,13 +3,9 @@ resource "aws_cloudwatch_log_group" "stackflow_logs" {
   retention_in_days = 7
 }
 
-# --- SNS Topic for Alerts ---
-
 resource "aws_sns_topic" "stackflow_alerts" {
   name = "stackflow-alerts"
 }
-
-# --- CloudWatch Alarms ---
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "stackflow-high-cpu"
@@ -20,7 +16,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   period              = 120
   statistic           = "Average"
   threshold           = 80
-  alarm_description   = "Triggers when EKS node CPU exceeds 80% for 4 minutes"
+  alarm_description   = "CPU above 80% for 4 min"
   alarm_actions       = [aws_sns_topic.stackflow_alerts.arn]
   ok_actions          = [aws_sns_topic.stackflow_alerts.arn]
 }

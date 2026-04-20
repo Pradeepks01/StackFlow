@@ -1,6 +1,5 @@
-# --- Karpenter Provisioner (Cost-Optimized Node Scheduling) ---
-# Replaces Cluster Autoscaler — launches nodes in seconds, packs efficiently
-# 20-30% additional savings over Cluster Autoscaler
+# karpenter provisioner - spot first strategy
+# replaces cluster autoscaler, way faster at launching nodes
 
 apiVersion: karpenter.sh/v1alpha5
 kind: Provisioner
@@ -8,7 +7,6 @@ metadata:
   name: stackflow-spot
   namespace: kube-system
 spec:
-  # Spot-first strategy: 80% cheaper compute
   requirements:
     - key: karpenter.sh/capacity-type
       operator: In
@@ -16,9 +14,9 @@ spec:
     - key: node.kubernetes.io/instance-type
       operator: In
       values:
-        - t4g.small     # ARM Graviton — cheapest
+        - t4g.small
         - t4g.medium
-        - t3a.small     # AMD — cheaper than Intel
+        - t3a.small
         - t3a.medium
         - t3.small
         - t3.medium
@@ -27,17 +25,14 @@ spec:
       values:
         - ap-south-1a
         - ap-south-1b
-  # Auto-consolidation: removes underutilized nodes
   consolidation:
     enabled: true
-  # Kill empty nodes after 30s
   ttlSecondsAfterEmpty: 30
-  # Recycle nodes every 24h for security patches
-  ttlSecondsUntilExpired: 86400
+  ttlSecondsUntilExpired: 86400  # recycle nodes daily
   limits:
     resources:
-      cpu: "8"       # Max 8 vCPU total
-      memory: "16Gi" # Max 16GB RAM total
+      cpu: "8"
+      memory: "16Gi"
   providerRef:
     name: stackflow-provider
 
@@ -52,11 +47,10 @@ spec:
     karpenter.sh/discovery: stackflow-cluster
   securityGroupSelector:
     karpenter.sh/discovery: stackflow-cluster
-  # Use ARM AMI for Graviton
   amiFamily: AL2
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
         volumeSize: 20Gi
-        volumeType: gp3    # gp3 cheaper than gp2
+        volumeType: gp3
         deleteOnTermination: true
