@@ -1,41 +1,59 @@
-# Default values for stackflow.
-replicaCount: 2
+# Default values for stackflow (Cost-Optimized)
+replicaCount: 1  # Start with 1, HPA scales up as needed
 
 image:
-  repository: 1234567890.dkr.ecr.us-east-1.amazonaws.com/stackflow
+  repository: 1234567890.dkr.ecr.ap-south-1.amazonaws.com/stackflow
   pullPolicy: IfNotPresent
   tag: "latest"
 
 backend:
   name: backend
   image:
-    repository: 1234567890.dkr.ecr.us-east-1.amazonaws.com/stackflow-backend
+    repository: 1234567890.dkr.ecr.ap-south-1.amazonaws.com/stackflow-backend
     tag: "latest"
   service:
     type: ClusterIP
     port: 5000
+  # Right-sized resources (based on actual usage, not over-provisioned)
+  resources:
+    requests:
+      cpu: 50m       # Actual usage: ~30-50m
+      memory: 64Mi   # Actual usage: ~50-80Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
   hpa:
     enabled: true
-    minReplicas: 2
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
+    minReplicas: 1   # Scale from 1 (not 2)
+    maxReplicas: 5   # Reduced from 10
+    targetCPUUtilizationPercentage: 75
+  # Prefer spot nodes for backend
+  nodeSelector:
+    workload: general
 
 frontend:
   name: frontend
   image:
-    repository: 1234567890.dkr.ecr.us-east-1.amazonaws.com/stackflow-frontend
+    repository: 1234567890.dkr.ecr.ap-south-1.amazonaws.com/stackflow-frontend
     tag: "latest"
   service:
     type: ClusterIP
     port: 80
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  nodeSelector:
+    workload: general
 
 ingress:
   enabled: true
-  className: "alb"
+  className: "nginx"  # NGINX Ingress instead of ALB Ingress (saves $16/mo)
   annotations:
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
+    nginx.ingress.kubernetes.io/rewrite-target: /
   hosts:
     - host: stackflow.example.com
       paths:
@@ -47,4 +65,4 @@ postgresql:
   auth:
     database: stackflow
     username: admin
-    password: "password"
+    existingSecret: stackflow-db-credentials
