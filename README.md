@@ -187,6 +187,4 @@ kubectl apply -f gitops/apps/
 terraform destroy
 ```
 
----
 
-Built by Pradeep
