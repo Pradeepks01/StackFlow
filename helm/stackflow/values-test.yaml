@@ -9,6 +9,28 @@ strategy:
       - pause: { duration: 1h }
       - setWeight: 50
       - pause: { duration: 1h }
+    canaryMetadata:
+      labels:
+        role: canary
+    stableMetadata:
+      labels:
+        role: stable
+
+backend:
+  image:
+    tag: "test-latest"
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 75
+  env:
+    LOG_LEVEL: "info"
+    NODE_ENV: "staging"
+
+frontend:
+  image:
+    tag: "test-latest"
 
 ingress:
   hosts:
