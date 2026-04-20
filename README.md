@@ -1,191 +1,156 @@
 # StackFlow
 
-Enterprise-grade 3-tier DevSecOps pipeline on AWS EKS.
+A 3-tier DevSecOps project running on AWS EKS. Built this to learn and demonstrate end-to-end infrastructure, CI/CD, security scanning, and observability in a real-world setup.
 
-![StackFlow Architecture](docs/images/architecture.png)
+The app itself is simple (React + Node.js + PostgreSQL), but the infra around it is production-grade.
 
-## What is this?
+## Tech Stack
 
-A complete end-to-end DevOps project covering everything from application code to production infrastructure. Built with real-world patterns used in enterprise environments.
+- **App:** React (Vite), Node.js/Express, PostgreSQL
+- **Infra:** Terraform, AWS (EKS, RDS, ALB, VPC, CloudWatch)
+- **CI/CD:** GitHub Actions, Jenkins, Argo CD
+- **Containers:** Docker, Helm, Karpenter
+- **Security:** Trivy, OPA Gatekeeper, Snyk
+- **Observability:** Prometheus, Grafana, Loki, Jaeger, OpenTelemetry
 
-**Stack:** React + Node.js + PostgreSQL, running on EKS with GitOps, full observability, and automated security scanning.
-
-## Architecture
-
-![CI/CD Pipeline](docs/images/cicd-pipeline.png)
+## How it works
 
 ```
-Developer Push → GitHub Actions → Docker Build → Trivy Scan → ECR Push → Helm Update → Argo CD Sync
+push code → GitHub Actions builds image → Trivy scans it → pushes to ECR → Argo CD syncs to EKS
 ```
 
-### Deployment Strategies
+Three environments, three branches:
 
-| Branch | Environment | Strategy |
-|---|---|---|
-| `devops` | dev namespace | Direct deploy |
-| `test` | test namespace | Canary (20% → 50% → 100%) |
-| `main` | prod namespace | Blue-Green with manual promote |
+| Branch | Deploys to | Strategy |
+|--------|-----------|----------|
+| devops | dev namespace | direct deploy |
+| test | test namespace | canary (20→50→100%) |
+| main | prod namespace | blue-green |
 
-### Observability
-
-![Observability](docs/images/observability.png)
-
-| Pillar | Stack |
-|---|---|
-| Metrics | Backend `/metrics` → Prometheus → Grafana → AlertManager → Slack |
-| Logging | Loki + Promtail (replaced ELK to save ~4GB RAM) |
-| Tracing | OpenTelemetry SDK → OTel Collector → Jaeger |
-
-## Cost Optimization
-
-This project is designed to run cheap without sacrificing quality.
-
-| Optimization | What we did | Savings |
-|---|---|---|
-| Spot instances | 70-90% of nodes run on spot | ~70% compute cost |
-| Graviton (ARM) | t4g instances instead of t3 | ~20-30% cheaper |
-| No NAT Gateway | Nodes in public subnets for dev | ~$32/month |
-| Loki over ELK | 192MB RAM vs 4-6GB | ~$80-200/month |
-| NGINX Ingress | Replaced ALB Ingress Controller | ~$16/month |
-| gp3 storage | RDS and EBS use gp3 over gp2 | ~20% storage cost |
-| Night scheduler | CronJob scales down dev/test at 10PM IST | ~40-60% compute |
-| Karpenter | Replaces Cluster Autoscaler, auto-consolidates | ~20-30% more |
-| Right-sized pods | 50m CPU / 64Mi (not 500m / 512Mi) | eliminates waste |
-
-**Before:** $250-350/month → **After:** $10-25/month
-
-## Quick Start
-
-### Run locally (free)
+## Run locally
 
 ```bash
 git clone https://github.com/Pradeepks01/StackFlow.git
 cd StackFlow/docker
+docker-compose up -d --build
+```
+
+Then hit:
+- http://localhost (frontend)
+- http://localhost:5000/health (backend)
+- http://localhost:3000 (grafana, login admin/admin)
+- http://localhost:9090 (prometheus)
+
+If you're on a small EC2 (t2.micro), use the lightweight version:
+```bash
 docker-compose -f docker-compose.free-tier.yml up -d --build
 ```
 
-Open:
-- Frontend: http://localhost
-- Backend: http://localhost:5000/health
-- Grafana: http://localhost:3000 (admin/admin)
-- Prometheus: http://localhost:9090
+## Project layout
 
-### Run on AWS
+```
+app/
+  backend/       express api with health, metrics, opentelemetry
+  frontend/      react app served by nginx
+
+database/
+  init.sql       creates users and system_logs tables
+  seed.sql       inserts sample data
+
+docker/
+  docker-compose.yml            standard (5 services)
+  docker-compose.free-tier.yml  fits in 1gb ram
+  docker-compose.dev.yml        full stack with elk + jaeger
+  prometheus/                   scrape config and alert rules
+
+terraform/
+  main.tf        s3 backend, dynamodb lock
+  vpc.tf         2 AZs, public + private subnets
+  eks.tf         spot nodes (graviton) + on-demand pool
+  rds.tf         postgres 16, gp3, secrets manager
+  alb.tf         https with acm cert, tls 1.3
+  iam.tf         eks roles, data source policy lookups
+  cloudwatch.tf  cpu alarm + sns notification
+  variables.tf
+  outputs.tf
+
+helm/stackflow/
+  values.yaml        base values (nginx ingress, right-sized resources)
+  values-dev.yaml    debug logging, hpa off
+  values-test.yaml   canary config
+  values-prod.yaml   blue-green, 4 replicas, strict limits
+
+k8s/
+  karpenter-provisioner.yaml   spot-first node scheduling
+  night-scheduler.yaml         scales down dev/test at 10pm IST
+  namespace.yaml               dev, test, prod namespaces
+
+gitops/apps/
+  dev.yaml     argo cd app pointing to devops branch
+  test.yaml    argo cd app pointing to test branch
+  prod.yaml    argo cd app pointing to main branch
+
+observability/
+  logging/     loki + promtail (replaced elk, uses 200mb instead of 4gb)
+  monitoring/  grafana dashboards
+  tracing/     jaeger + otel collector config
+  alerting/    alertmanager → slack
+
+security/
+  trivy/       image scan config
+  opa/         admission policies (no root, resource limits)
+  snyk/        dependency scanning
+
+cicd/jenkins/  jenkinsfile + deploy scripts (canary, rollback)
+scripts/       setup, bootstrap, deploy, cleanup
+```
+
+## Cost stuff
+
+Designed to not blow up your AWS bill:
+
+| What | Why |
+|------|-----|
+| Spot instances | 70-90% cheaper compute |
+| Graviton (ARM) | t4g is 20-30% cheaper than t3 |
+| No NAT gateway | saves ~$32/month (dev only, prod should have it) |
+| Loki not ELK | 200mb ram vs 4gb |
+| gp3 storage | cheaper than gp2, better iops |
+| Night scheduler | scales down at 10pm, up at 8am |
+| Right-sized pods | 50m cpu / 64mi, not 500m / 512mi |
+
+Rough cost: ~$10-25/month after optimization. Free tier with docker-compose.
+
+## Deploy to AWS
 
 ```bash
 cd terraform
-export TF_VAR_db_password="YourStrongPassword123"
+export TF_VAR_db_password="YourPassword"
 terraform init
 terraform plan
 terraform apply
-```
 
-Then bootstrap EKS:
-```bash
+# then bootstrap eks
 ./scripts/eks-bootstrap.sh
-kubectl apply -f gitops/apps/dev.yaml
-kubectl apply -f gitops/apps/test.yaml
-kubectl apply -f gitops/apps/prod.yaml
+
+# deploy apps via gitops
+kubectl apply -f gitops/apps/
 ```
-
-## Project Structure
-
-```
-stackflow/
-├── app/
-│   ├── backend/           # Node.js Express API
-│   └── frontend/          # React (Vite) + Nginx
-├── database/              # SQL init + seed scripts
-├── docker/                # Docker Compose (full, dev, free-tier)
-├── terraform/             # VPC, EKS, RDS, ALB, IAM, CloudWatch
-├── helm/stackflow/        # Helm chart with env-specific values
-├── k8s/
-│   ├── namespace.yaml
-│   ├── karpenter-provisioner.yaml
-│   └── night-scheduler.yaml
-├── .github/workflows/     # GitHub Actions CI/CD
-├── cicd/jenkins/          # Jenkinsfile + deployment scripts
-├── gitops/                # Argo CD app manifests (dev/test/prod)
-├── observability/
-│   ├── alerting/          # AlertManager + Slack
-│   ├── logging/           # Loki + Promtail (lightweight ELK replacement)
-│   ├── monitoring/        # Prometheus + Grafana dashboards
-│   └── tracing/           # Jaeger + OTel Collector
-├── security/
-│   ├── trivy/             # Container image scanning
-│   ├── snyk/              # Dependency scanning
-│   └── opa/               # Admission policies
-└── scripts/               # Setup, deploy, cleanup, rollback
-```
-
-## Infrastructure
-
-| Resource | Spec |
-|---|---|
-| VPC | 10.0.0.0/16, 2 AZs, public + private subnets |
-| EKS | K8s 1.29, spot + on-demand node groups (Graviton ARM) |
-| RDS | PostgreSQL 16.1, gp3, encrypted, Secrets Manager |
-| ALB | HTTPS with ACM cert, TLS 1.3, HTTP redirect |
-| State | S3 backend + DynamoDB locking |
-| Alerts | CloudWatch → SNS → email/Slack |
 
 ## Security
 
-| Layer | How |
-|---|---|
-| Image scanning | Trivy in CI, blocks on HIGH/CRITICAL |
-| Secrets | AWS Secrets Manager, no hardcoded passwords |
-| IAM | Least-privilege roles, data source lookups |
-| Network | Network policies, frontend can't reach DB directly |
-| TLS | ACM + ALB with TLS 1.3 |
-| Admission | OPA Gatekeeper, enforces runAsNonRoot |
-| Encryption | RDS storage encrypted at rest |
-
-## CI/CD Pipeline
-
-Two CI/CD paths available:
-
-**GitHub Actions** (primary)
-```
-Build → Trivy Scan → Push to ECR → Update Helm values → Argo CD syncs
-```
-
-**Jenkins** (alternative)
-```
-Build → Scan → Push → Branch-based deploy (canary/blue-green)
-```
-
-Key point: Trivy scans run **before** push. Vulnerable images never reach ECR.
-
-## Deployment Strategies
-
-### Canary (test branch)
-```yaml
-strategy:
-  canary:
-    steps:
-      - setWeight: 20
-      - pause: { duration: 1h }
-      - setWeight: 50
-      - pause: { duration: 1h }
-```
-
-### Blue-Green (main branch)
-```yaml
-strategy:
-  blueGreen:
-    activeService: stackflow-frontend
-    previewService: stackflow-frontend-preview
-    autoPromotionEnabled: false
-```
+- Trivy scans images before push (blocks on HIGH/CRITICAL)
+- OPA enforces runAsNonRoot, resource limits
+- Secrets in AWS Secrets Manager, not in code
+- Docker containers run with `no-new-privileges` and `read_only`
+- RDS encrypted, private subnet only
+- TLS 1.3 on ALB
 
 ## Cleanup
 
 ```bash
-cd terraform
 terraform destroy
-
-# or use the script
+# or
 ./scripts/cleanup.sh
 ```
 
