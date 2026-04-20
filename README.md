@@ -4,19 +4,45 @@ A 3-tier DevSecOps project running on AWS EKS. Built this to learn and demonstra
 
 The app itself is simple (React + Node.js + PostgreSQL), but the infra around it is production-grade.
 
-## Tech Stack
+## Architecture
 
-- **App:** React (Vite), Node.js/Express, PostgreSQL
-- **Infra:** Terraform, AWS (EKS, RDS, ALB, VPC, CloudWatch)
-- **CI/CD:** GitHub Actions, Jenkins, Argo CD
-- **Containers:** Docker, Helm, Karpenter
-- **Security:** Trivy, OPA Gatekeeper, Snyk
-- **Observability:** Prometheus, Grafana, Loki, Jaeger, OpenTelemetry
+```mermaid
+graph TB
+    Dev[Developer] -->|push| GH[GitHub]
+    GH -->|trigger| GA[GitHub Actions]
+    GA -->|build| Docker[Docker Build]
+    Docker -->|scan| Trivy[Trivy Scan]
+    Trivy -->|pass| ECR[AWS ECR]
+    ECR -->|pull| ArgoCD[Argo CD]
 
-## How it works
+    subgraph EKS["AWS EKS Cluster"]
+        ArgoCD -->|sync| Dev_NS[dev namespace]
+        ArgoCD -->|canary| Test_NS[test namespace]
+        ArgoCD -->|blue-green| Prod_NS[prod namespace]
+        Karpenter[Karpenter] -->|manage| Spot[Spot Nodes - Graviton]
+        Karpenter -->|manage| OnDemand[On-Demand Nodes]
+        NightSched[Night Scheduler] -->|scale down 10PM| Dev_NS
+        NightSched -->|scale down 10PM| Test_NS
+    end
+
+    subgraph Observability
+        Prom[Prometheus] --> Grafana[Grafana]
+        Loki[Loki + Promtail] --> Grafana
+        Jaeger[Jaeger] --> Grafana
+        Prom --> AM[AlertManager] --> Slack[Slack]
+    end
+
+    ALB[ALB - TLS 1.3] --> EKS
+    EKS --> RDS["RDS PostgreSQL (private subnet)"]
+    NGINX[NGINX Ingress] --> EKS
+```
+
+## CI/CD Pipeline
+
+![CI/CD Pipeline](docs/images/cicd-pipeline.png)
 
 ```
-push code → GitHub Actions builds image → Trivy scans it → pushes to ECR → Argo CD syncs to EKS
+push code → GitHub Actions builds → Trivy scans → pushes to ECR → Argo CD syncs to EKS
 ```
 
 Three environments, three branches:
@@ -26,6 +52,25 @@ Three environments, three branches:
 | devops | dev namespace | direct deploy |
 | test | test namespace | canary (20→50→100%) |
 | main | prod namespace | blue-green |
+
+## Observability
+
+![Observability Stack](docs/images/observability.png)
+
+| Pillar | Stack |
+|--------|-------|
+| Metrics | Backend /metrics → Prometheus → Grafana → AlertManager → Slack |
+| Logging | Loki + Promtail (replaced ELK, uses 200mb vs 4gb) |
+| Tracing | OpenTelemetry SDK → OTel Collector → Jaeger |
+
+## Tech Stack
+
+- **App:** React (Vite), Node.js/Express, PostgreSQL
+- **Infra:** Terraform, AWS (EKS, RDS, ALB, VPC, CloudWatch)
+- **CI/CD:** GitHub Actions, Jenkins, Argo CD
+- **Containers:** Docker, Helm, Karpenter
+- **Security:** Trivy, OPA Gatekeeper, Snyk
+- **Observability:** Prometheus, Grafana, Loki, Jaeger, OpenTelemetry
 
 ## Run locally
 
@@ -71,8 +116,6 @@ terraform/
   alb.tf         https with acm cert, tls 1.3
   iam.tf         eks roles, data source policy lookups
   cloudwatch.tf  cpu alarm + sns notification
-  variables.tf
-  outputs.tf
 
 helm/stackflow/
   values.yaml        base values (nginx ingress, right-sized resources)
@@ -83,37 +126,34 @@ helm/stackflow/
 k8s/
   karpenter-provisioner.yaml   spot-first node scheduling
   night-scheduler.yaml         scales down dev/test at 10pm IST
-  namespace.yaml               dev, test, prod namespaces
 
 gitops/apps/
-  dev.yaml     argo cd app pointing to devops branch
-  test.yaml    argo cd app pointing to test branch
-  prod.yaml    argo cd app pointing to main branch
+  dev.yaml     argo cd app → devops branch
+  test.yaml    argo cd app → test branch
+  prod.yaml    argo cd app → main branch
 
 observability/
-  logging/     loki + promtail (replaced elk, uses 200mb instead of 4gb)
+  logging/     loki + promtail
   monitoring/  grafana dashboards
-  tracing/     jaeger + otel collector config
+  tracing/     jaeger + otel collector
   alerting/    alertmanager → slack
 
 security/
   trivy/       image scan config
-  opa/         admission policies (no root, resource limits)
+  opa/         admission policies
   snyk/        dependency scanning
 
-cicd/jenkins/  jenkinsfile + deploy scripts (canary, rollback)
+cicd/jenkins/  jenkinsfile + deploy scripts
 scripts/       setup, bootstrap, deploy, cleanup
 ```
 
-## Cost stuff
-
-Designed to not blow up your AWS bill:
+## Cost optimization
 
 | What | Why |
 |------|-----|
 | Spot instances | 70-90% cheaper compute |
 | Graviton (ARM) | t4g is 20-30% cheaper than t3 |
-| No NAT gateway | saves ~$32/month (dev only, prod should have it) |
+| No NAT gateway | saves ~$32/month (dev only) |
 | Loki not ELK | 200mb ram vs 4gb |
 | gp3 storage | cheaper than gp2, better iops |
 | Night scheduler | scales down at 10pm, up at 8am |
@@ -126,32 +166,25 @@ Rough cost: ~$10-25/month after optimization. Free tier with docker-compose.
 ```bash
 cd terraform
 export TF_VAR_db_password="YourPassword"
-terraform init
-terraform plan
-terraform apply
+terraform init && terraform apply
 
-# then bootstrap eks
 ./scripts/eks-bootstrap.sh
-
-# deploy apps via gitops
 kubectl apply -f gitops/apps/
 ```
 
 ## Security
 
-- Trivy scans images before push (blocks on HIGH/CRITICAL)
-- OPA enforces runAsNonRoot, resource limits
-- Secrets in AWS Secrets Manager, not in code
+- Trivy scans before push (blocks HIGH/CRITICAL)
 - Docker containers run with `no-new-privileges` and `read_only`
-- RDS encrypted, private subnet only
+- Secrets in AWS Secrets Manager
+- RDS encrypted, private subnet
 - TLS 1.3 on ALB
+- OPA enforces runAsNonRoot
 
 ## Cleanup
 
 ```bash
 terraform destroy
-# or
-./scripts/cleanup.sh
 ```
 
 ---
