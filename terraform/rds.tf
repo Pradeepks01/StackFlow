@@ -1,22 +1,30 @@
+# --- RDS PostgreSQL (Cost-Optimized) ---
+
 resource "aws_db_instance" "stackflow_db" {
   allocated_storage    = 20
-  storage_type         = "gp2"
+  storage_type         = "gp3"  # gp3 is cheaper than gp2 (20% savings + better IOPS)
   engine               = "postgres"
   engine_version       = "16.1"
-  instance_class       = "db.t3.micro"
+  instance_class       = "db.t3.micro"  # Free tier eligible
   db_name              = "stackflow"
   username             = "admin"
   password             = aws_secretsmanager_secret_version.db_secret_value.secret_string
   parameter_group_name = "default.postgres16"
   skip_final_snapshot  = true
   storage_encrypted    = true
-  
+
+  # Cost optimizations
+  multi_az                = false  # Single AZ for dev/demo (saves ~$13/month)
+  backup_retention_period = 3      # 3 days instead of 7 (saves storage)
+  deletion_protection     = false  # Easy cleanup after demo
+
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.stackflow_db_subnet.name
 
   tags = {
     Environment = var.environment
     Project     = "StackFlow"
+    CostCenter  = "optimized"
   }
 }
 
