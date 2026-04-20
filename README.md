@@ -1,31 +1,16 @@
-# StackFlow 🚀
+# StackFlow
 
-> **Enterprise-grade DevSecOps ecosystem** — from code to production with GitOps, observability, and zero-downtime deployments on AWS EKS.
+Enterprise-grade 3-tier DevSecOps pipeline on AWS EKS.
 
 ![StackFlow Architecture](docs/images/architecture.png)
 
----
+## What is this?
 
-## 📌 Overview
+A complete end-to-end DevOps project covering everything from application code to production infrastructure. Built with real-world patterns used in enterprise environments.
 
-StackFlow is a complete, end-to-end DevOps pipeline that demonstrates a **production-grade** cloud-native workflow. It covers the entire software lifecycle:
+**Stack:** React + Node.js + PostgreSQL, running on EKS with GitOps, full observability, and automated security scanning.
 
-| Layer | Technologies |
-|---|---|
-| **Application** | React (Vite) + Node.js (Express) + PostgreSQL |
-| **Containerization** | Docker multi-stage builds |
-| **Infrastructure** | Terraform → AWS VPC, EKS, RDS, ALB, IAM |
-| **Packaging** | Helm charts with environment-specific overrides |
-| **CI/CD** | GitHub Actions + Jenkins (dual-path) |
-| **GitOps** | Argo CD + Argo Rollouts |
-| **Observability** | Prometheus, Grafana, ELK Stack, Jaeger, AlertManager |
-| **Security** | Trivy, Snyk, OPA, Network Policies, Secrets Manager |
-
----
-
-## 🏗 Architecture
-
-### CI/CD Pipeline Flow
+## Architecture
 
 ![CI/CD Pipeline](docs/images/cicd-pipeline.png)
 
@@ -33,194 +18,177 @@ StackFlow is a complete, end-to-end DevOps pipeline that demonstrates a **produc
 Developer Push → GitHub Actions → Docker Build → Trivy Scan → ECR Push → Helm Update → Argo CD Sync
 ```
 
-**Key Design Decisions:**
-- 🔒 Security scan runs **before** push — vulnerable images never reach the registry
-- 🔄 GitOps model — CI updates Helm values, Argo CD handles deployment
-- 🌿 Branch-based environments — each branch maps to a namespace and strategy
-
 ### Deployment Strategies
 
-| Branch | Environment | Strategy | Details |
-|---|---|---|---|
-| `devops` | `dev` namespace | Direct Deploy | Fast iteration, minimal replicas |
-| `test` | `test` namespace | **Canary** | 20% → 50% → 100% with pause gates |
-| `main` | `prod` namespace | **Blue-Green** | Zero-downtime, manual promotion |
+| Branch | Environment | Strategy |
+|---|---|---|
+| `devops` | dev namespace | Direct deploy |
+| `test` | test namespace | Canary (20% → 50% → 100%) |
+| `main` | prod namespace | Blue-Green with manual promote |
 
-### Observability Stack
+### Observability
 
 ![Observability](docs/images/observability.png)
 
-| Pillar | Pipeline |
+| Pillar | Stack |
 |---|---|
-| **Metrics** | Backend `/metrics` → Prometheus → Grafana + AlertManager → Slack |
-| **Logging** | Winston → Filebeat → Logstash → Elasticsearch → Kibana |
-| **Tracing** | OpenTelemetry SDK → OTel Collector → Jaeger |
+| Metrics | Backend `/metrics` → Prometheus → Grafana → AlertManager → Slack |
+| Logging | Loki + Promtail (replaced ELK to save ~4GB RAM) |
+| Tracing | OpenTelemetry SDK → OTel Collector → Jaeger |
 
----
+## Cost Optimization
 
-## 🛠 Getting Started
+This project is designed to run cheap without sacrificing quality.
 
-### Prerequisites
+| Optimization | What we did | Savings |
+|---|---|---|
+| Spot instances | 70-90% of nodes run on spot | ~70% compute cost |
+| Graviton (ARM) | t4g instances instead of t3 | ~20-30% cheaper |
+| No NAT Gateway | Nodes in public subnets for dev | ~$32/month |
+| Loki over ELK | 192MB RAM vs 4-6GB | ~$80-200/month |
+| NGINX Ingress | Replaced ALB Ingress Controller | ~$16/month |
+| gp3 storage | RDS and EBS use gp3 over gp2 | ~20% storage cost |
+| Night scheduler | CronJob scales down dev/test at 10PM IST | ~40-60% compute |
+| Karpenter | Replaces Cluster Autoscaler, auto-consolidates | ~20-30% more |
+| Right-sized pods | 50m CPU / 64Mi (not 500m / 512Mi) | eliminates waste |
 
-- Docker & Docker Compose
-- AWS CLI (configured)
-- Terraform >= 1.5
-- kubectl
-- Helm 3
+**Before:** $250-350/month → **After:** $10-25/month
 
-### Local Development (Docker Compose)
+## Quick Start
+
+### Run locally (free)
 
 ```bash
-# Clone the repo
-git clone https://github.com/your-org/stackflow.git
-cd stackflow
-
-# Set up environment variables
-cp .env.example docker/.env
-# Edit docker/.env with your credentials
-
-# Start all services
-cd docker
-docker-compose up -d
+git clone https://github.com/Pradeepks01/StackFlow.git
+cd StackFlow/docker
+docker-compose -f docker-compose.free-tier.yml up -d --build
 ```
 
-Visit `http://localhost` to view the frontend.
+Open:
+- Frontend: http://localhost
+- Backend: http://localhost:5000/health
+- Grafana: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
 
-### Infrastructure Provisioning
+### Run on AWS
 
 ```bash
 cd terraform
-
-# Initialize with remote state
+export TF_VAR_db_password="YourStrongPassword123"
 terraform init
-
-# Provide password securely (never hardcode!)
-export TF_VAR_db_password="YourStrongPassword@123"
-
-# Plan and apply
 terraform plan
 terraform apply
 ```
 
-### EKS Cluster Bootstrap
-
+Then bootstrap EKS:
 ```bash
-# After terraform apply, bootstrap the cluster
 ./scripts/eks-bootstrap.sh
-```
-
-This installs:
-- ✅ ALB Ingress Controller
-- ✅ Argo CD
-- ✅ Argo Rollouts
-
-### Deploy with Argo CD
-
-```bash
-# Apply Argo CD application manifests
 kubectl apply -f gitops/apps/dev.yaml
 kubectl apply -f gitops/apps/test.yaml
 kubectl apply -f gitops/apps/prod.yaml
 ```
 
----
-
-## 📂 Project Structure
+## Project Structure
 
 ```
 stackflow/
 ├── app/
-│   ├── backend/          # Node.js Express API + observability
-│   └── frontend/         # React SPA (Vite) + Nginx
-├── database/             # SQL init and seed scripts
-├── docker/               # Docker Compose for local dev
-├── terraform/            # AWS infrastructure (VPC, EKS, RDS, ALB, IAM)
-├── helm/stackflow/       # Helm chart with env-specific values
-├── cicd/jenkins/         # Jenkinsfile + build scripts
-├── .github/workflows/    # GitHub Actions CI/CD pipeline
-├── gitops/               # Argo CD Application manifests
+│   ├── backend/           # Node.js Express API
+│   └── frontend/          # React (Vite) + Nginx
+├── database/              # SQL init + seed scripts
+├── docker/                # Docker Compose (full, dev, free-tier)
+├── terraform/             # VPC, EKS, RDS, ALB, IAM, CloudWatch
+├── helm/stackflow/        # Helm chart with env-specific values
+├── k8s/
+│   ├── namespace.yaml
+│   ├── karpenter-provisioner.yaml
+│   └── night-scheduler.yaml
+├── .github/workflows/     # GitHub Actions CI/CD
+├── cicd/jenkins/          # Jenkinsfile + deployment scripts
+├── gitops/                # Argo CD app manifests (dev/test/prod)
 ├── observability/
-│   ├── alerting/         # AlertManager + Slack + Prometheus rules
-│   ├── logging/          # ELK Stack (Elasticsearch, Logstash, Kibana)
-│   ├── monitoring/       # Prometheus + Grafana configs
-│   └── tracing/          # OpenTelemetry Collector + Jaeger
+│   ├── alerting/          # AlertManager + Slack
+│   ├── logging/           # Loki + Promtail (lightweight ELK replacement)
+│   ├── monitoring/        # Prometheus + Grafana dashboards
+│   └── tracing/           # Jaeger + OTel Collector
 ├── security/
-│   ├── trivy/            # Container image scanning config
-│   ├── snyk/             # Dependency vulnerability scanning
-│   └── opa/              # Admission control policies
-├── k8s/                  # Raw Kubernetes manifests
-├── scripts/              # Setup, deploy, cleanup, rollback scripts
-└── docs/                 # Architecture, security, troubleshooting docs
+│   ├── trivy/             # Container image scanning
+│   ├── snyk/              # Dependency scanning
+│   └── opa/               # Admission policies
+└── scripts/               # Setup, deploy, cleanup, rollback
 ```
 
----
+## Infrastructure
 
-## 🔐 Security
-
-| Layer | Implementation |
+| Resource | Spec |
 |---|---|
-| **Image Scanning** | Trivy scans in CI before ECR push (blocks on HIGH/CRITICAL) |
-| **Dependency Scanning** | Snyk integration for Node.js dependencies |
-| **Admission Control** | OPA Gatekeeper — enforces `runAsNonRoot` on all pods |
-| **Network Policies** | Only frontend → backend traffic allowed |
-| **Secrets** | AWS Secrets Manager for DB credentials (no hardcoded passwords) |
-| **IAM** | Least-privilege roles for EKS cluster and worker nodes |
-| **TLS** | ACM certificate + ALB HTTPS listener with TLS 1.3 |
-| **Encryption** | RDS storage encryption at rest enabled |
+| VPC | 10.0.0.0/16, 2 AZs, public + private subnets |
+| EKS | K8s 1.29, spot + on-demand node groups (Graviton ARM) |
+| RDS | PostgreSQL 16.1, gp3, encrypted, Secrets Manager |
+| ALB | HTTPS with ACM cert, TLS 1.3, HTTP redirect |
+| State | S3 backend + DynamoDB locking |
+| Alerts | CloudWatch → SNS → email/Slack |
 
----
+## Security
 
-## 📊 Infrastructure Specs
-
-| Resource | Specification |
+| Layer | How |
 |---|---|
-| **VPC** | `10.0.0.0/16` — 3 private + 3 public subnets across 3 AZs |
-| **EKS** | Kubernetes 1.29 — managed node group (1–4 `t3.small` nodes) |
-| **RDS** | PostgreSQL 16.1 — encrypted, private subnet only |
-| **ALB** | Internet-facing — HTTP→HTTPS redirect, TLS 1.3 |
-| **State** | S3 backend + DynamoDB locking for Terraform |
-| **Monitoring** | CloudWatch alarms → SNS → email/Slack notifications |
+| Image scanning | Trivy in CI, blocks on HIGH/CRITICAL |
+| Secrets | AWS Secrets Manager, no hardcoded passwords |
+| IAM | Least-privilege roles, data source lookups |
+| Network | Network policies, frontend can't reach DB directly |
+| TLS | ACM + ALB with TLS 1.3 |
+| Admission | OPA Gatekeeper, enforces runAsNonRoot |
+| Encryption | RDS storage encrypted at rest |
 
----
+## CI/CD Pipeline
 
-## 🚀 Deployment Strategy Details
+Two CI/CD paths available:
 
-### Canary (Test Environment)
+**GitHub Actions** (primary)
+```
+Build → Trivy Scan → Push to ECR → Update Helm values → Argo CD syncs
+```
 
+**Jenkins** (alternative)
+```
+Build → Scan → Push → Branch-based deploy (canary/blue-green)
+```
+
+Key point: Trivy scans run **before** push. Vulnerable images never reach ECR.
+
+## Deployment Strategies
+
+### Canary (test branch)
 ```yaml
 strategy:
   canary:
     steps:
-      - setWeight: 20       # 20% traffic to new version
+      - setWeight: 20
       - pause: { duration: 1h }
-      - setWeight: 50       # 50% traffic
+      - setWeight: 50
       - pause: { duration: 1h }
-      # Auto-promote to 100%
 ```
 
-### Blue-Green (Production)
-
+### Blue-Green (main branch)
 ```yaml
 strategy:
   blueGreen:
     activeService: stackflow-frontend
     previewService: stackflow-frontend-preview
-    autoPromotionEnabled: false   # Manual promotion required
+    autoPromotionEnabled: false
 ```
 
----
-
-## 🧹 Cleanup
+## Cleanup
 
 ```bash
-# Remove all AWS resources
 cd terraform
 terraform destroy
 
-# Or use the cleanup script
+# or use the script
 ./scripts/cleanup.sh
 ```
 
 ---
 
-Built with ❤️ by Pradeep | Enterprise DevOps Architecture
+Built by Pradeep
