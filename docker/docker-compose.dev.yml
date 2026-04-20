@@ -1,50 +1,107 @@
 version: '3.8'
 
+# dev version - includes ELK + Jaeger for full observability testing
+# needs at least t2.medium (4gb ram)
+
 services:
-  frontend:
-    build:
-      context: ../app/frontend
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-    environment:
-      - VITE_API_URL=http://localhost:5000
-    depends_on:
-      - backend
-
-  backend:
-    build:
-      context: ../app/backend
-      dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
-    env_file:
-      - .env
-    environment:
-      - PORT=5000
-      - DB_HOST=db
-      - DB_NAME=stackflow
-      - NODE_ENV=development
-      - LOG_LEVEL=debug
-    depends_on:
-      - db
-
+  # ---- PostgreSQL Database ----
   db:
-    image: postgres:15-alpine
-    env_file:
-      - .env
+    image: postgres:16-alpine
+    container_name: stackflow-db
+    restart: unless-stopped
     environment:
-      - POSTGRES_DB=stackflow
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: StrongPass123
+      POSTGRES_DB: stackflow
+    ports:
+      - "5432:5432"
     volumes:
       - ../database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ../database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d stackflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    tmpfs:
+      - /tmp
+      - /run
 
-  # --- ELK Stack for local log testing ---
+  # ---- Backend API ----
+  backend:
+    build:
+      context: ../app/backend
+      dockerfile: Dockerfile
+    container_name: stackflow-backend
+    restart: unless-stopped
+    environment:
+      PORT: "5000"
+      DB_USER: admin
+      DB_PASSWORD: StrongPass123
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: stackflow
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # ---- Frontend (Nginx + React) ----
+  frontend:
+    build:
+      context: ../app/frontend
+      dockerfile: Dockerfile
+    container_name: stackflow-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+  # ---- Prometheus ----
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: stackflow-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    ports:
+      - "9090:9090"
+    security_opt:
+      - no-new-privileges:true
+
+  # ---- Grafana ----
+  grafana:
+    image: grafana/grafana:latest
+    container_name: stackflow-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    security_opt:
+      - no-new-privileges:true
+
+  # ---- Elasticsearch ----
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: stackflow-elasticsearch
+    restart: unless-stopped
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -52,8 +109,11 @@ services:
     ports:
       - "9200:9200"
 
+  # ---- Kibana ----
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: stackflow-kibana
+    restart: unless-stopped
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     ports:
@@ -61,37 +121,27 @@ services:
     depends_on:
       - elasticsearch
 
-  # --- Monitoring ---
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
-    ports:
-      - "9090:9090"
-    depends_on:
-      - alertmanager
-
-  alertmanager:
-    image: prom/alertmanager:latest
-    volumes:
-      - ../observability/alerting/alertmanager.yaml:/etc/alertmanager/alertmanager.yml
-    ports:
-      - "9093:9093"
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-
-  # --- Tracing ---
+  # ---- Jaeger (tracing) ----
   jaeger:
     image: jaegertracing/all-in-one:latest
+    container_name: stackflow-jaeger
+    restart: unless-stopped
     ports:
       - "16686:16686"
       - "4318:4318"
 
+  # ---- AlertManager ----
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: stackflow-alertmanager
+    restart: unless-stopped
+    volumes:
+      - ../observability/alerting/alertmanager.yaml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   pgdata:
+    driver: local

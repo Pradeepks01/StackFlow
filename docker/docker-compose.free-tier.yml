@@ -1,83 +1,117 @@
-# StackFlow - Free Tier Optimized (t2.micro friendly)
-# Runs: Frontend + Backend + DB + Prometheus + Grafana
-# RAM usage: ~680MB (fits in 1GB t2.micro)
-
 version: '3.8'
 
+# free tier version - fits in 1gb ram (t2.micro)
+# runs: frontend + backend + db + prometheus + grafana
+
 services:
-  frontend:
-    build:
-      context: ../app/frontend
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
+  # ---- PostgreSQL Database ----
+  db:
+    image: postgres:16-alpine
+    container_name: stackflow-db
+    restart: unless-stopped
     environment:
-      - VITE_API_URL=http://localhost:5000
-    depends_on:
-      - backend
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: StrongPass123
+      POSTGRES_DB: stackflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - ../database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ../database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d stackflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    tmpfs:
+      - /tmp
+      - /run
     deploy:
       resources:
         limits:
-          memory: 50M
+          memory: 200M
 
+  # ---- Backend API ----
   backend:
     build:
       context: ../app/backend
       dockerfile: Dockerfile
+    container_name: stackflow-backend
+    restart: unless-stopped
+    environment:
+      PORT: "5000"
+      DB_USER: admin
+      DB_PASSWORD: StrongPass123
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: stackflow
+      NODE_ENV: production
+      LOG_LEVEL: info
     ports:
       - "5000:5000"
-    environment:
-      - PORT=5000
-      - DB_HOST=db
-      - DB_USER=admin
-      - DB_PASSWORD=StrongPass123
-      - DB_NAME=stackflow
-      - NODE_ENV=production
-      - LOG_LEVEL=info
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
     deploy:
       resources:
         limits:
           memory: 150M
 
-  db:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=StrongPass123
-      - POSTGRES_DB=stackflow
-    volumes:
-      - ../database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
-      - ../database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
-      - pgdata:/var/lib/postgresql/data
+  # ---- Frontend (Nginx + React) ----
+  frontend:
+    build:
+      context: ../app/frontend
+      dockerfile: Dockerfile
+    container_name: stackflow-frontend
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "80:80"
+    depends_on:
+      - backend
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:
-          memory: 200M
+          memory: 50M
 
+  # ---- Prometheus ----
   prometheus:
     image: prom/prometheus:latest
+    container_name: stackflow-prometheus
+    restart: unless-stopped
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
     ports:
       - "9090:9090"
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:
           memory: 200M
 
+  # ---- Grafana ----
   grafana:
     image: grafana/grafana:latest
+    container_name: stackflow-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
     ports:
       - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - prometheus
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:
@@ -85,3 +119,4 @@ services:
 
 volumes:
   pgdata:
+    driver: local
