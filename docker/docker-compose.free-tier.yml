@@ -1,0 +1,87 @@
+# StackFlow - Free Tier Optimized (t2.micro friendly)
+# Runs: Frontend + Backend + DB + Prometheus + Grafana
+# RAM usage: ~680MB (fits in 1GB t2.micro)
+
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ../app/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=http://localhost:5000
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+
+  backend:
+    build:
+      context: ../app/backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DB_HOST=db
+      - DB_USER=admin
+      - DB_PASSWORD=StrongPass123
+      - DB_NAME=stackflow
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+    depends_on:
+      - db
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=StrongPass123
+      - POSTGRES_DB=stackflow
+    volumes:
+      - ../database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ../database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+    ports:
+      - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+
+volumes:
+  pgdata:
